@@ -27,6 +27,8 @@ Makefile
 # VS Code - exclude most but keep settings
 .vscode/*
 !.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 
 # OS specific
 .DS_Store

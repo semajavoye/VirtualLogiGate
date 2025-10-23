@@ -1,0 +1,17 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "cmake --build ${command:cmake.buildDirectory} --config Debug --target VirtualLogiGate -- -j 4",
+            "options": {
+                "cwd": "${command:cmake.buildDirectory}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+    ]
+}

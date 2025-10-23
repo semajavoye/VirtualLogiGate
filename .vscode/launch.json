@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run target",
+            "type": "cppdbg",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${command:cmake.launchTargetPath}",
+            "cwd": "${workspaceFolder}/build"
+         }
+    ]
+}
