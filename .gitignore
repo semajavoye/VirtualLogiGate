@@ -1,3 +1,47 @@
-*.exe
-.vscode
+# Build directories
 /build/
+
+# Executables
+*.exe
+*.app
+
+# Object files
+*.o
+*.obj
+
+# Libraries
+*.lib
+*.a
+*.so
+*.dylib
+*.dll
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# VS Code - exclude most but keep settings
+.vscode/*
+!.vscode/settings.json
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.swp
+*.swo
+*~
+*.tmp
+*.log
+
+# IDE specific
+.idea/
+*.suo
+*.user
+*.vcxproj.user
