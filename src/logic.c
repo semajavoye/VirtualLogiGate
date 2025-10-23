@@ -9,6 +9,16 @@ void update_gate(struct Gate *gate) {
     SignalState result = LOW;
 
     switch (gate->type) {
+        case CONSTANT_LOW:
+            // Constant LOW gate: always outputs LOW
+            result = LOW;
+            break;
+
+        case CONSTANT_HIGH:
+            // Constant HIGH gate: always outputs HIGH
+            result = HIGH;
+            break;
+        
         case AND:
             // AND Logic (A * B): Output is HIGH if and only if BOTH inputs are HIGH.
             result = (in_a == HIGH && in_b == HIGH) ? HIGH : LOW;

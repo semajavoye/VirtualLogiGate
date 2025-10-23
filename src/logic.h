@@ -2,8 +2,14 @@
 #define LOGIC_H
 
 // Typedefs for defining some states
-typedef enum { AND, OR, INVERT, NAND, NOR, XOR, XNOR} GateType;
-typedef enum { LOW = 0, HIGH = 1 } SignalState;
+typedef enum { 
+    CONSTANT_LOW = 0, CONSTANT_HIGH = 1,
+    AND, OR, INVERT, NAND, NOR, XOR, XNOR} GateType;
+typedef enum { 
+    LOW = 0, 
+    HIGH = 1,
+    UNKNOWN = 2 // Just for Debugging or uninitialized wires
+} SignalState;
 
 struct Gate
 {
@@ -22,6 +28,28 @@ struct Gate
 struct Wire 
 {
     SignalState state;
+};
+
+struct Component 
+{
+    char *name; // Name of the component
+
+    // internal structure
+    struct Gate *gates;
+    int num_gates;
+
+    struct Component **subcomponents;
+    int num_subcomponents;
+
+    struct Wire *wires;
+    int num_wires;
+
+    // external connections
+    struct Wire **inputs;
+    int num_inputs;
+
+    struct Wire **outputs;
+    int num_outputs;
 };
 
 void update_gate(struct Gate *gate);
