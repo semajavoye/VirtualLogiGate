@@ -5,6 +5,8 @@
     "C_Cpp.errorSquiggles": "enabled",
     "files.associations": {
         "*.h": "c",
-        "sdl.h": "c"
+        "sdl.h": "c",
+        "limits": "c",
+        "typeinfo": "c"
     }
 }

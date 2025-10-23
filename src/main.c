@@ -12,27 +12,17 @@
 #include "ui.h"
 #include "input.h"
 #include "render_utils.h"
+#include "actions.h"
 
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static TTF_Font *font = NULL;
 static UI *ui = NULL;
+static UI *ingame_ui = NULL;
 static InputHandler *input_handler = NULL;
 
 #define WINDOW_WIDTH 900
 #define WINDOW_HEIGHT 600
-
-// Callback-Funktionen für Buttons
-void on_start_simulation_clicked(void) {
-    SDL_Log("Starting simulation...");
-}
-
-void on_quit_clicked(void) {
-    SDL_Log("Exiting.");
-    SDL_Event quit_event;
-    quit_event.type = SDL_EVENT_QUIT;
-    SDL_PushEvent(&quit_event);
-}
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
@@ -68,10 +58,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     // UI initialisieren
     ui = ui_create(font);
+    ingame_ui = ui_create(font);
     
     // Buttons hinzufügen
     ui_add_button(ui, 300, 200, 300, 50, "Start Simulation", on_start_simulation_clicked);
     ui_add_button(ui, 300, 270, 300, 50, "Quit", on_quit_clicked);
+
+    // In-Game UI Buttons hinzufügen
+    ui_add_button(ingame_ui, 700, 20, 180, 40, "Quit to Menu", on_back_to_menu_clicked);
     
     // Input-Handler initialisieren
     input_handler = input_create(ui);
@@ -85,8 +79,15 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         return SDL_APP_SUCCESS;
     }
 
-    // Alle Events an den Input-Handler weiterleiten
-    input_handle_event(input_handler, event);
+    // Pass events to the appropriate UI based on current state
+    UI *active_ui = (current_ui_state == UI_STATE_MAIN_MENU) ? ui : ingame_ui;
+    
+    // Handle input for the active UI
+    if (event->type == SDL_EVENT_MOUSE_MOTION) {
+        ui_handle_mouse_motion(active_ui, event->motion.x, event->motion.y);
+    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        ui_handle_mouse_click(active_ui, event->button.x, event->button.y);
+    }
 
     return SDL_APP_CONTINUE;
 }
@@ -96,12 +97,23 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     SDL_SetRenderDrawColor(renderer, 30, 30, 30, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(renderer);
 
-    // Titel rendern
-    SDL_Color white = { 255, 255, 255, 255 };
-    render_text_centered(renderer, font, "Virtual LogiGate Simulator", 50, white);
-
-    // UI rendern (alle Buttons)
-    ui_render(ui, renderer);
+    // Render UI based on current UIState
+    switch (current_ui_state) {
+        case UI_STATE_MAIN_MENU:
+            // Titel rendern
+            {
+                SDL_Color white = { 255, 255, 255, 255 };
+                render_text_centered(renderer, font, "Virtual LogiGate Simulator", 50, white);
+            }
+            ui_render(ui, renderer);
+            break;
+            
+        case UI_STATE_INGAME:
+            // Render the circuit editor/simulation view
+            ui_render(ingame_ui, renderer);
+            // TODO: Render your circuit editor here
+            break;
+    }
 
     SDL_RenderPresent(renderer);
     return SDL_APP_CONTINUE;
@@ -109,8 +121,15 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
-    input_destroy(input_handler);
-    ui_destroy(ui);
+    if (input_handler) {
+        input_destroy(input_handler);
+    }
+    if (ui) {
+        ui_destroy(ui);
+    }
+    if (ingame_ui) {
+        ui_destroy(ingame_ui);
+    }
     
     if (font) {
         TTF_CloseFont(font);

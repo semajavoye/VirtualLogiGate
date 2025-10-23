@@ -10,6 +10,11 @@ typedef enum {
     HIGH = 1,
     UNKNOWN = 2 // Just for Debugging or uninitialized wires
 } SignalState;
+typedef enum {
+    CONNECTION_GATE,
+    CONNECTION_COMPONENT,
+    CONNECTION_LAMP
+} ConnectionType;
 
 struct Gate
 {
@@ -23,6 +28,19 @@ struct Gate
     // Outputs
     // "Store the adress where the wire lives in memory"
     struct Wire *output;
+};
+
+struct WireConnection
+{
+    ConnectionType type;
+
+    union {
+        struct Gate *gate;
+        struct Component *component;
+        struct Lamp *lamp;
+    } target;
+
+    int pin_index; // Index of the pin on the target
 };
 
 struct Wire 
@@ -50,6 +68,13 @@ struct Component
 
     struct Wire **outputs;
     int num_outputs;
+};
+
+struct Lamp 
+{
+    struct Wire *input;
+
+    SignalState state;
 };
 
 void update_gate(struct Gate *gate);

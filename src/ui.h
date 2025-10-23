@@ -20,6 +20,11 @@ typedef struct {
     TTF_Font *font;
 } UI;
 
+typedef enum {
+    UI_STATE_MAIN_MENU,
+    UI_STATE_INGAME
+} AppUIState;
+
 UI* ui_create(TTF_Font *font);
 void ui_destroy(UI *ui);
 
