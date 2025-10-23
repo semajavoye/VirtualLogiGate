@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <SDL3/SDL.h>
 #include "logic.h"
 
 int main() {
