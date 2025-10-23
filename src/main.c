@@ -2,24 +2,38 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-// Includes for SDL3
-#define SDL_MAIN_USE_CALLBACKS 1 // use the callbacks instead of main()
+#define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
-// Include logic gate simulation
 #include "logic.h"
+#include "editor.h"
+#include "ui.h"
+#include "input.h"
+#include "render_utils.h"
 
-/* We will use this renderer to draw into this window every frame. */
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static TTF_Font *font = NULL;
+static UI *ui = NULL;
+static InputHandler *input_handler = NULL;
 
 #define WINDOW_WIDTH 900
 #define WINDOW_HEIGHT 600
 
-/* This function runs once at startup. */
+// Callback-Funktionen für Buttons
+void on_start_simulation_clicked(void) {
+    SDL_Log("Starting simulation...");
+}
+
+void on_quit_clicked(void) {
+    SDL_Log("Exiting.");
+    SDL_Event quit_event;
+    quit_event.type = SDL_EVENT_QUIT;
+    SDL_PushEvent(&quit_event);
+}
+
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("VirtualLogiGate", "1.0", "com.example.virtuallogigate");
@@ -29,7 +43,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    if (!SDL_CreateWindowAndRenderer("VirtualLogiGate", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+    if (!SDL_CreateWindowAndRenderer("VirtualLogiGate", WINDOW_WIDTH, WINDOW_HEIGHT, 
+                                     SDL_WINDOW_RESIZABLE, &window, &renderer)) {
         SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -48,64 +63,55 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    SDL_SetRenderLogicalPresentation(renderer, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    SDL_SetRenderLogicalPresentation(renderer, WINDOW_WIDTH, WINDOW_HEIGHT, 
+                                     SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-    return SDL_APP_CONTINUE;  /* carry on with the program! */
+    // UI initialisieren
+    ui = ui_create(font);
+    
+    // Buttons hinzufügen
+    ui_add_button(ui, 300, 200, 300, 50, "Start Simulation", on_start_simulation_clicked);
+    ui_add_button(ui, 300, 270, 300, 50, "Quit", on_quit_clicked);
+    
+    // Input-Handler initialisieren
+    input_handler = input_create(ui);
+
+    return SDL_APP_CONTINUE;
 }
 
-/* This function runs when a new event (mouse input, keypresses, etc) occurs. */
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
     if (event->type == SDL_EVENT_QUIT) {
-        return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
+        return SDL_APP_SUCCESS;
     }
-    return SDL_APP_CONTINUE;  /* carry on with the program! */
+
+    // Alle Events an den Input-Handler weiterleiten
+    input_handle_event(input_handler, event);
+
+    return SDL_APP_CONTINUE;
 }
 
-/* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-    const int charsize = SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
+    SDL_SetRenderDrawColor(renderer, 30, 30, 30, SDL_ALPHA_OPAQUE);
+    SDL_RenderClear(renderer);
 
-    /* as you can see from this, rendering draws over whatever was drawn before it. */
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);  /* black, full alpha */
-    SDL_RenderClear(renderer);  /* start with a blank canvas. */
+    // Titel rendern
+    SDL_Color white = { 255, 255, 255, 255 };
+    render_text_centered(renderer, font, "Virtual LogiGate Simulator", 50, white);
 
-    // Create the title
-    char title_buffer[27];
-    size_t title_length = sizeof(title_buffer) - 1;
-    SDL_snprintf(title_buffer, sizeof(title_buffer), "Virtual LogiGate Simulator",
-                (unsigned long long)(SDL_GetTicks() / 1000));
+    // UI rendern (alle Buttons)
+    ui_render(ui, renderer);
 
-    SDL_Color text_color = { 255, 255, 255, 255 }; /* white full alpha */
-    SDL_Surface *text_surface = TTF_RenderText_Blended(font, title_buffer, title_length, text_color); /* anti-aliased text */
-
-    if (text_surface) {
-        SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
-
-        if (text_texture) {
-            SDL_FRect dest_rect;
-            dest_rect.w = (float) text_surface->w;
-            dest_rect.h = (float) text_surface->h;
-            dest_rect.x = (WINDOW_WIDTH - text_surface->w) / 2.0f;
-            dest_rect.y = 400;
-
-            SDL_RenderTexture(renderer, text_texture, NULL, &dest_rect);
-
-            SDL_DestroyTexture(text_texture);
-        }
-
-        SDL_DestroySurface(text_surface);
-    }
-
-    SDL_RenderPresent(renderer);  /* put it all on the screen! */
-
-    return SDL_APP_CONTINUE;  /* carry on with the program! */
+    SDL_RenderPresent(renderer);
+    return SDL_APP_CONTINUE;
 }
 
-/* This function runs once at shutdown. */
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
+    input_destroy(input_handler);
+    ui_destroy(ui);
+    
     if (font) {
         TTF_CloseFont(font);
     }
