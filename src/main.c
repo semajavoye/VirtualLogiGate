@@ -1,93 +1,65 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <SDL3/SDL.h>
 #include "logic.h"
 
-int main() {
-    // Allocate Memory for Components (2 Gates, 4 Wires)
-    
-    // Wires: Two Inputs (A, B), Two Outputs (Sum, Carry)
-    struct Wire *w_a = (struct Wire *)malloc(sizeof(struct Wire));
-    struct Wire *w_b = (struct Wire *)malloc(sizeof(struct Wire));
-    struct Wire *w_sum = (struct Wire *)malloc(sizeof(struct Wire));
-    struct Wire *w_carry = (struct Wire *)malloc(sizeof(struct Wire));
+#define SDL_MAIN_USE_CALLBACKS 1 // use the callbacks instead of main()
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 
-    // Gates: One XOR for Sum, One AND for Carry
-    struct Gate *g_xor = (struct Gate *)malloc(sizeof(struct Gate));
-    struct Gate *g_and = (struct Gate *)malloc(sizeof(struct Gate));
+/* We will use this renderer to draw into this window every frame. */
+static SDL_Window *window = NULL;
+static SDL_Renderer *renderer = NULL;
 
-    // Safety check for all allocations
-    if (!w_a || !w_b || !w_sum || !w_carry || !g_xor || !g_and) {
-        fprintf(stderr, "Memory allocation failed! Cannot run Half-Adder test.\n");
-        // Minimal cleanup before exit
-        free(w_a); free(w_b); free(w_sum); free(w_carry); free(g_xor); free(g_and);
-        return 1;
+/* This function runs once at startup. */
+SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+{
+    SDL_SetAppMetadata("VirtualLogiGate", "1.0", "com.example.virtuallogigate");
+
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
     }
 
-    // Initialize Gates
-    g_xor->type = XOR;
-    g_and->type = AND;
+    if (!SDL_CreateWindowAndRenderer("VirtualLogiGate", 640, 480, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+        SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+    SDL_SetRenderLogicalPresentation(renderer, 640, 480, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-    // Connect the Half-Adder Circuit (Pointer Assignment/Wiring)
-    
-    // XOR Gate (Calculates SUM = A XOR B)
-    g_xor->input1 = w_a;    
-    g_xor->input2 = w_b;    
-    g_xor->output = w_sum;  
-    
-    // AND Gate (Calculates CARRY = A AND B)
-    g_and->input1 = w_a;    
-    g_and->input2 = w_b;    
-    g_and->output = w_carry; 
+    return SDL_APP_CONTINUE;  /* carry on with the program! */
+}
 
-    printf("--- Half-Adder Simulation Results\n");
-    
-    // Run All Test Cases (Full Truth Table)
-    
-    // Test Case 1: 0 + 0 = Sum 0, Carry 0
-    w_a->state = LOW;
-    w_b->state = LOW;
-    update_gate(g_xor); // Update XOR (Sum)
-    update_gate(g_and); // Update AND (Carry)
-    printf("\nTest 1 (0 + 0):\n");
-    printf("  A: %d, B: %d -> Sum: %d, Carry: %d\n", 
-           w_a->state, w_b->state, w_sum->state, w_carry->state);
-    
-    // Test Case 2: 0 + 1 = Sum 1, Carry 0
-    w_a->state = LOW;
-    w_b->state = HIGH;
-    update_gate(g_xor); 
-    update_gate(g_and); 
-    printf("\nTest 2 (0 + 1):\n");
-    printf("  A: %d, B: %d -> Sum: %d, Carry: %d\n", 
-           w_a->state, w_b->state, w_sum->state, w_carry->state);
-    
-    // Test Case 3: 1 + 0 = Sum 1, Carry 0
-    w_a->state = HIGH;
-    w_b->state = LOW;
-    update_gate(g_xor); 
-    update_gate(g_and); 
-    printf("\nTest 3 (1 + 0):\n");
-    printf("  A: %d, B: %d -> Sum: %d, Carry: %d\n", 
-           w_a->state, w_b->state, w_sum->state, w_carry->state);
+/* This function runs when a new event (mouse input, keypresses, etc) occurs. */
+SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
+{
+    if (event->type == SDL_EVENT_QUIT) {
+        return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
+    }
+    return SDL_APP_CONTINUE;  /* carry on with the program! */
+}
 
-    // Test Case 4: 1 + 1 = Sum 0, Carry 1
-    w_a->state = HIGH;
-    w_b->state = HIGH;
-    update_gate(g_xor); 
-    update_gate(g_and); 
-    printf("\nTest 4 (1 + 1):\n");
-    printf("  A: %d, B: %d -> Sum: %d, Carry: %d\n", 
-           w_a->state, w_b->state, w_sum->state, w_carry->state);
-    
-    // Clean Up Memory (CRITICAL)
-    free(w_a);
-    free(w_b);
-    free(w_sum);
-    free(w_carry);
-    free(g_xor);
-    free(g_and);
+/* This function runs once per frame, and is the heart of the program. */
+SDL_AppResult SDL_AppIterate(void *appstate)
+{
+    const double now = ((double)SDL_GetTicks()) / 1000.0;  /* convert from milliseconds to seconds. */
+    /* choose the color for the frame we will draw. The sine wave trick makes it fade between colors smoothly. */
+    const float red = (float) (0.5 + 0.5 * SDL_sin(now));
+    const float green = (float) (0.5 + 0.5 * SDL_sin(now + SDL_PI_D * 2 / 3));
+    const float blue = (float) (0.5 + 0.5 * SDL_sin(now + SDL_PI_D * 4 / 3));
+    SDL_SetRenderDrawColorFloat(renderer, red, green, blue, SDL_ALPHA_OPAQUE_FLOAT);  /* new color, full alpha. */
 
-    return 0;
+    /* clear the window to the draw color. */
+    SDL_RenderClear(renderer);
+
+    /* put the newly-cleared rendering on the screen. */
+    SDL_RenderPresent(renderer);
+
+    return SDL_APP_CONTINUE;  /* carry on with the program! */
+}
+
+/* This function runs once at shutdown. */
+void SDL_AppQuit(void *appstate, SDL_AppResult result)
+{
+    /* SDL will clean up the window/renderer for us. */
 }
