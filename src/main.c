@@ -98,8 +98,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         SDL_DestroySurface(text_surface);
     }
 
-    SDL_RenderDebugTextFormat(renderer, (float) ((WINDOW_WIDTH - (charsize * 46)) / 2), 400, "(This program has been running for %" SDL_PRIu64 " seconds.)", SDL_GetTicks() / 1000);
-
     SDL_RenderPresent(renderer);  /* put it all on the screen! */
 
     return SDL_APP_CONTINUE;  /* carry on with the program! */
