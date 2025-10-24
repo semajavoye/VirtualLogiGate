@@ -22,6 +22,23 @@ static UI *ui = NULL;
 static UI *ingame_ui = NULL;
 static InputHandler *input_handler = NULL;
 
+// Function to update button positions based on window size
+static void update_ui_layout(int window_w, int window_h)
+{
+    // Clear existing buttons
+    ui_destroy(ui);
+    ui = ui_create(font);
+    ui_destroy(ingame_ui);
+    ingame_ui = ui_create(font);
+    
+    // Re-add main menu buttons - centered based on actual window size
+    ui_add_button(ui, window_w / 2.0f - 150, window_h / 2.0f - 60, 300, 50, "Start Simulation", on_start_simulation_clicked);
+    ui_add_button(ui, window_w / 2.0f - 150, window_h / 2.0f + 10, 300, 50, "Quit", on_quit_clicked);
+
+    // Re-add in-game UI buttons
+    ui_add_button(ingame_ui, window_w - 190.0f, 10, 180, 40, "Quit to Menu", on_back_to_menu_clicked);
+}
+
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("VirtualLogiGate", "1.0", "com.example.virtuallogigate");
@@ -51,19 +68,16 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    SDL_SetRenderLogicalPresentation(renderer, WINDOW_WIDTH, WINDOW_HEIGHT, 
-                                     SDL_LOGICAL_PRESENTATION_LETTERBOX);
-
     // UI initialisieren
     ui = ui_create(font);
     ingame_ui = ui_create(font);
     
-    // Buttons hinzufügen
-    ui_add_button(ui, WINDOW_WIDTH / 2 - 150, 200, 300, 50, "Start Simulation", on_start_simulation_clicked);
-    ui_add_button(ui, WINDOW_WIDTH / 2 - 150, 270, 300, 50, "Quit", on_quit_clicked);
-
-    // In-Game UI Buttons hinzufügen
-    ui_add_button(ingame_ui, WINDOW_WIDTH - 190, 10, 180, 40, "Quit to Menu", on_back_to_menu_clicked);
+    // Get actual window size for responsive button positioning
+    int window_w, window_h;
+    SDL_GetWindowSizeInPixels(window, &window_w, &window_h);
+    
+    // Initial button layout
+    update_ui_layout(window_w, window_h);
     
     // Input-Handler initialisieren
     input_handler = input_create(ui);
@@ -77,16 +91,19 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         return SDL_APP_SUCCESS;
     }
 
+    // Handle window resize events
+    if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+        int window_w, window_h;
+        SDL_GetWindowSizeInPixels(window, &window_w, &window_h);
+        update_ui_layout(window_w, window_h);
+    }
+
     // Pass events to the appropriate UI based on current state
     UI *active_ui = (current_ui_state == UI_STATE_MAIN_MENU) ? ui : ingame_ui;
     
     // Handle input for the active UI
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
-        // Convert window coordinates to logical coordinates
-        float logical_x, logical_y;
-        SDL_RenderCoordinatesFromWindow(renderer, event->motion.x, event->motion.y, 
-                                       &logical_x, &logical_y);
-        ui_handle_mouse_motion(active_ui, logical_x, logical_y);
+        ui_handle_mouse_motion(active_ui, event->motion.x, event->motion.y);
     } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         ui_handle_mouse_click(active_ui, event->button.x, event->button.y);
     }

@@ -1,5 +1,4 @@
 #include "render_utils.h"
-#include "window.h"
 #include <string.h>
 
 void render_text_centered(SDL_Renderer *renderer, TTF_Font *font,
@@ -10,10 +9,15 @@ void render_text_centered(SDL_Renderer *renderer, TTF_Font *font,
         SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
         
         if (texture) {
+            // Get actual window size
+            int window_w, window_h;
+            SDL_Window *window = SDL_GetRenderWindow(renderer);
+            SDL_GetWindowSizeInPixels(window, &window_w, &window_h);
+            
             SDL_FRect dest_rect;
             dest_rect.w = (float)surface->w;
             dest_rect.h = (float)surface->h;
-            dest_rect.x = ((float)WINDOW_WIDTH - dest_rect.w) / 2.0f;
+            dest_rect.x = ((float)window_w - dest_rect.w) / 2.0f;
             dest_rect.y = y;
             
             SDL_RenderTexture(renderer, texture, NULL, &dest_rect);
