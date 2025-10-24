@@ -7,6 +7,7 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
+#include "window.h"
 #include "logic.h"
 #include "editor.h"
 #include "ui.h"
@@ -20,9 +21,6 @@ static TTF_Font *font = NULL;
 static UI *ui = NULL;
 static UI *ingame_ui = NULL;
 static InputHandler *input_handler = NULL;
-
-#define WINDOW_WIDTH 1200
-#define WINDOW_HEIGHT 900
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
