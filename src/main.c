@@ -21,8 +21,8 @@ static UI *ui = NULL;
 static UI *ingame_ui = NULL;
 static InputHandler *input_handler = NULL;
 
-#define WINDOW_WIDTH 900
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1200
+#define WINDOW_HEIGHT 900
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
@@ -61,11 +61,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     ingame_ui = ui_create(font);
     
     // Buttons hinzufügen
-    ui_add_button(ui, 300, 200, 300, 50, "Start Simulation", on_start_simulation_clicked);
-    ui_add_button(ui, 300, 270, 300, 50, "Quit", on_quit_clicked);
+    ui_add_button(ui, WINDOW_WIDTH / 2 - 150, 200, 300, 50, "Start Simulation", on_start_simulation_clicked);
+    ui_add_button(ui, WINDOW_WIDTH / 2 - 150, 270, 300, 50, "Quit", on_quit_clicked);
 
     // In-Game UI Buttons hinzufügen
-    ui_add_button(ingame_ui, 700, 20, 180, 40, "Quit to Menu", on_back_to_menu_clicked);
+    ui_add_button(ingame_ui, WINDOW_WIDTH - 190, 10, 180, 40, "Quit to Menu", on_back_to_menu_clicked);
     
     // Input-Handler initialisieren
     input_handler = input_create(ui);
