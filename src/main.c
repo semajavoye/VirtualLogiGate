@@ -82,7 +82,11 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     
     // Handle input for the active UI
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
-        ui_handle_mouse_motion(active_ui, event->motion.x, event->motion.y);
+        // Convert window coordinates to logical coordinates
+        float logical_x, logical_y;
+        SDL_RenderCoordinatesFromWindow(renderer, event->motion.x, event->motion.y, 
+                                       &logical_x, &logical_y);
+        ui_handle_mouse_motion(active_ui, logical_x, logical_y);
     } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         ui_handle_mouse_click(active_ui, event->button.x, event->button.y);
     }
