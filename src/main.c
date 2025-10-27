@@ -10,6 +10,7 @@
 #include "window.h"
 #include "logic.h"
 #include "editor.h"
+#include "camera.h"
 #include "ui.h"
 #include "input.h"
 #include "render_utils.h"
@@ -81,6 +82,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     
     // Input-Handler initialisieren
     input_handler = input_create(ui);
+    
+    // Initialize editor (including camera)
+    editor_init();
 
     return SDL_APP_CONTINUE;
 }
@@ -109,11 +113,30 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     }
 
     if (current_ui_state == UI_STATE_INGAME && can_accept_ingame_input()) {
-        // Pass click to wire placement handler if in-game
-        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            if (event->button.button == SDL_BUTTON_LEFT) {
-                wire_placement_handle_click(renderer, event->button.x, event->button.y);
-            }
+        Camera *camera = editor_get_camera();
+        
+        // Handle camera panning with middle mouse button
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_MIDDLE) {
+            camera_start_pan(camera, event->button.x, event->button.y);
+        } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_MIDDLE) {
+            camera_stop_pan(camera);
+        } else if (event->type == SDL_EVENT_MOUSE_MOTION) {
+            camera_update_pan(camera, event->motion.x, event->motion.y);
+        }
+        
+        // Handle camera zoom with mouse wheel
+        if (event->type == SDL_EVENT_MOUSE_WHEEL) {
+            float mouse_x, mouse_y;
+            SDL_GetMouseState(&mouse_x, &mouse_y);
+            camera_zoom(camera, event->wheel.y, mouse_x, mouse_y);
+        }
+        
+        // Handle wire placement with left click
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+            // Convert screen coordinates to world coordinates
+            float world_x, world_y;
+            camera_screen_to_world(camera, event->button.x, event->button.y, &world_x, &world_y);
+            wire_placement_handle_click(world_x, world_y);
         }
     }
 
