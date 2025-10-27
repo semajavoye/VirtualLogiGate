@@ -55,6 +55,7 @@ void ui_handle_mouse_motion(UI *ui, float x, float y) {
 }
 
 void ui_handle_mouse_click(UI *ui, float x, float y) {
+    // Button Handles
     for (int i = 0; i < ui->button_count; i++) {
         Button *btn = &ui->buttons[i];
         

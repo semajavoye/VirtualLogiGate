@@ -7,6 +7,7 @@ UI *ingame_ui = NULL;
 void on_start_simulation_clicked(void) {
     SDL_Log("Starting simulation...");
     current_ui_state = UI_STATE_INGAME;
+    ingame_entry_time = SDL_GetTicks();
 }
 
 void on_quit_clicked(void)
@@ -20,4 +21,8 @@ void on_quit_clicked(void)
 void on_back_to_menu_clicked(void) {
     SDL_Log("Returning to main menu...");
     current_ui_state = UI_STATE_MAIN_MENU;
+}
+
+bool can_accept_ingame_input() {
+    return SDL_GetTicks() - ingame_entry_time >= 1000;
 }

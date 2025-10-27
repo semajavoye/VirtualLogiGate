@@ -49,7 +49,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
     if (!SDL_CreateWindowAndRenderer("VirtualLogiGate", WINDOW_WIDTH, WINDOW_HEIGHT, 
-                                     SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+                                     SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL, &window, &renderer)) {
         SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -108,6 +108,15 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         ui_handle_mouse_click(active_ui, event->button.x, event->button.y);
     }
 
+    if (current_ui_state == UI_STATE_INGAME && can_accept_ingame_input()) {
+        // Pass click to wire placement handler if in-game
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                wire_placement_handle_click(renderer, event->button.x, event->button.y);
+            }
+        }
+    }
+
     return SDL_APP_CONTINUE;
 }
 
@@ -129,8 +138,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
             
         case UI_STATE_INGAME:
             // Render the circuit editor/simulation view
+            editor_render(renderer);
             ui_render(ingame_ui, renderer);
-            // TODO: Render your circuit editor here
             break;
     }
 
