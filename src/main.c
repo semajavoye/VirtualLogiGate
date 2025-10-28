@@ -131,12 +131,32 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             camera_zoom(camera, event->wheel.y, mouse_x, mouse_y);
         }
         
-        // Handle wire placement with left click
-        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
-            // Convert screen coordinates to world coordinates
+        // Wire placement interaction:
+        // - Left button: start/add point
+        // - Right button: finish current wire
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             float world_x, world_y;
             camera_screen_to_world(camera, event->button.x, event->button.y, &world_x, &world_y);
-            wire_placement_handle_click(world_x, world_y);
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                // If no active placement, start; otherwise add point
+                wire_placement_add_point(world_x, world_y);
+            } else if (event->button.button == SDL_BUTTON_RIGHT) {
+                // If currently placing, finish; otherwise try to select a wire
+                if (wire_placement_is_active()) {
+                    wire_placement_finish();
+                } else {
+                    editor_select_wire_at(world_x, world_y, camera);
+                }
+            }
+        } else if (event->type == SDL_EVENT_MOUSE_MOTION) {
+            float world_x, world_y;
+            camera_screen_to_world(camera, event->motion.x, event->motion.y, &world_x, &world_y);
+            wire_placement_update_pointer(world_x, world_y);
+        } else if (event->type == SDL_EVENT_KEY_DOWN) {
+            const bool *kb = SDL_GetKeyboardState(NULL);
+            if (kb && kb[SDL_SCANCODE_DELETE]) {
+                editor_delete_selected();
+            }
         }
     }
 
@@ -181,6 +201,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     if (ingame_ui) {
         ui_destroy(ingame_ui);
     }
+    
+    // Editor cleanup
+    editor_shutdown();
     
     if (font) {
         TTF_CloseFont(font);
