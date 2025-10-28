@@ -47,14 +47,14 @@ void on_place_lamp_clicked(void)
 
 void on_place_switch_clicked(void)
 {
-    if (editor_is_switch_placement_active())
+    if (editor_is_gate_placement_active())
     {
-        editor_cancel_switch_placement();
-        SDL_Log("Switch placement cancelled.");
+        editor_cancel_gate_placement();
+        SDL_Log("Gate placement cancelled.");
     }
     else
     {
-        editor_begin_switch_placement();
-        SDL_Log("Switch placement enabled. Click to place a switch.");
+        editor_begin_gate_placement();
+        SDL_Log("Gate placement enabled. Click to place a gate.");
     }
 }

@@ -39,7 +39,7 @@ static void update_ui_layout(int window_w, int window_h)
     // Re-add in-game UI buttons
     ui_add_button(ingame_ui, window_w - 190.0f, 10, 180, 40, "Quit to Menu", on_back_to_menu_clicked);
     ui_add_button(ingame_ui, window_w - 190.0f, 60, 180, 40, "Place Lamp", on_place_lamp_clicked);
-    ui_add_button(ingame_ui, window_w - 190.0f, 110, 180, 40, "Place Switch", on_place_switch_clicked);
+    ui_add_button(ingame_ui, window_w - 190.0f, 110, 180, 40, "Place Gate", on_place_switch_clicked);
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -91,6 +91,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     // Initialize editor (including camera)
     editor_init();
+    editor_set_gate_label_font(font);
 
     return SDL_APP_CONTINUE;
 }
@@ -162,6 +163,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 {
                     editor_create_lamp(world_x, world_y);
                 }
+                else if (editor_is_gate_placement_active())
+                {
+                    editor_create_gate(world_x, world_y);
+                }
                 else
                 {
                     wire_placement_add_point(world_x, world_y);
@@ -172,6 +177,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 if (editor_is_lamp_placement_active())
                 {
                     editor_cancel_lamp_placement();
+                }
+                else if (editor_is_gate_placement_active())
+                {
+                    editor_cancel_gate_placement();
                 }
                 else if (wire_placement_is_active())
                 {
@@ -222,9 +231,47 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                         editor_begin_lamp_placement();
                     }
                     break;
+                case SDL_SCANCODE_S:
+                    editor_begin_gate_placement();
+                    break;
                 case SDL_SCANCODE_T:
                     // Toggle selected switch (if any)
                     editor_toggle_selected_switch();
+                    break;
+                case SDL_SCANCODE_H:
+                    // set selected wire HIGH
+                    editor_set_selected_wire_state(HIGH);
+                    break;
+                case SDL_SCANCODE_K:
+                    // set selected wire LOW
+                    editor_set_selected_wire_state(LOW);
+                    break;
+                case SDL_SCANCODE_1:
+                    editor_set_selected_gate_type(CONSTANT_LOW);
+                    break;
+                case SDL_SCANCODE_2:
+                    editor_set_selected_gate_type(CONSTANT_HIGH);
+                    break;
+                case SDL_SCANCODE_3:
+                    editor_set_selected_gate_type(AND);
+                    break;
+                case SDL_SCANCODE_4:
+                    editor_set_selected_gate_type(OR);
+                    break;
+                case SDL_SCANCODE_5:
+                    editor_set_selected_gate_type(INVERT);
+                    break;
+                case SDL_SCANCODE_6:
+                    editor_set_selected_gate_type(NAND);
+                    break;
+                case SDL_SCANCODE_7:
+                    editor_set_selected_gate_type(NOR);
+                    break;
+                case SDL_SCANCODE_8:
+                    editor_set_selected_gate_type(XOR);
+                    break;
+                case SDL_SCANCODE_9:
+                    editor_set_selected_gate_type(XNOR);
                     break;
                 default:
                     break;

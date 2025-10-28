@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 // Gate pin model
 typedef enum
@@ -27,7 +28,7 @@ static EditorGate *gates = NULL;
 static size_t gate_count = 0;
 static size_t gate_capacity = 0;
 
-static bool switch_placement_active = false;
+/* switch placement state is defined in editor.c (internal) */
 
 struct VisualGate
 {
@@ -73,6 +74,7 @@ struct VisualLamp
 // Editor initialization and management
 void editor_init(void);
 Camera *editor_get_camera(void);
+void editor_set_gate_label_font(TTF_Font *font);
 
 // Shutdown/cleanup editor resources
 void editor_shutdown(void);
@@ -120,10 +122,10 @@ void editor_cancel_lamp_placement(void);
 int editor_is_lamp_placement_active(void);
 
 // Gate / switch placement
-void editor_begin_switch_placement(void);
-void editor_cancel_switch_placement(void);
-int editor_is_switch_placement_active(void);
-void editor_create_switch(float world_x, float world_y);
+void editor_begin_gate_placement(void);
+void editor_cancel_gate_placement(void);
+int editor_is_gate_placement_active(void);
+void editor_create_gate(float world_x, float world_y);
 
 // Force a signal propagation pass (updates gates, wires, lamps)
 void editor_propagate_signals(void);
@@ -131,7 +133,15 @@ void editor_propagate_signals(void);
 // Toggle selected switch (if selection is a switch)
 void editor_toggle_selected_switch(void);
 
+// Directly set the selected gate type
+void editor_set_selected_gate_type(GateType type);
+
+// Set the currently selected wire state directly (HIGH/LOW/UNKNOWN)
+void editor_set_selected_wire_state(SignalState state);
+
 // Delete the currently selected object (wire/lamp/gate)
 void editor_delete_selected(void);
+
+
 
 #endif // EDITOR_H

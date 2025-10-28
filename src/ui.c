@@ -90,8 +90,8 @@ void ui_render(UI *ui, SDL_Renderer *renderer)
         {
             if (strcmp(btn->text, "Place Lamp") == 0)
                 lamp_mode_active = editor_is_lamp_placement_active() != 0;
-            if (strcmp(btn->text, "Place Switch") == 0)
-                switch_mode_active = editor_is_switch_placement_active() != 0;
+            if (strcmp(btn->text, "Place Gate") == 0)
+                switch_mode_active = editor_is_gate_placement_active() != 0;
         }
 
         // Button-Hintergrund

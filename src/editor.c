@@ -1,8 +1,12 @@
 #include "editor.h"
 #include "camera.h"
+#include "render_utils.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
+
+typedef struct EditorWire EditorWire;
 
 // Forward declarations for static functions
 static void ensure_gates_capacity(void);
@@ -10,6 +14,12 @@ static int find_nearest_gate_pin(float world_x, float world_y, float max_distanc
 static int hit_test_gate(float world_x, float world_y);
 static void detach_gates_from_wire(struct Wire *logic_wire);
 static void gate_pin_world(const EditorGate *eg, GatePinType pin, float *out_x, float *out_y);
+static void reassign_logic_wire(struct Wire *from, struct Wire *to);
+static struct Wire *attach_wire_endpoint_to_existing(EditorWire *new_wire, size_t point_index);
+static void align_wire_endpoint_to_gate(EditorWire *w, size_t point_index, int gate_index, GatePinType pin);
+static int snap_point_to_existing_endpoint(float *x, float *y);
+static void update_gate_output_for_type(struct Gate *gate);
+static const char *gate_type_label(GateType type);
 
 // Global camera instance for the editor
 static Camera editor_camera;
@@ -26,7 +36,7 @@ static size_t wire_point_count = 0;
 static size_t wire_point_capacity = 0;
 
 // Editor-level wire that also can hold a pointer to the logic-level struct Wire
-typedef struct
+struct EditorWire
 {
     WirePoint *points; // dynamic array of points for this wire
     size_t count;
@@ -37,7 +47,7 @@ typedef struct
     GatePinType start_pin;
     int end_gate_index;
     GatePinType end_pin;
-} EditorWire;
+};
 
 static EditorWire *wires = NULL;
 static size_t wire_count = 0;
@@ -56,9 +66,13 @@ static size_t lamp_count = 0;
 static size_t lamp_capacity = 0;
 
 static bool lamp_placement_active = false;
+static bool switch_placement_active = false;
 
 static const float LAMP_DEFAULT_RADIUS = 6.0f;
 static const float LAMP_CONNECTION_RADIUS = 10.0f;
+static const float GATE_PIN_SNAP_RADIUS = 16.0f;
+static const float WIRE_ENDPOINT_MERGE_RADIUS = 3.5f;
+static TTF_Font *gate_label_font = NULL;
 
 // Selection
 typedef enum
@@ -90,6 +104,11 @@ void editor_init(void)
 Camera *editor_get_camera(void)
 {
     return &editor_camera;
+}
+
+void editor_set_gate_label_font(TTF_Font *font)
+{
+    gate_label_font = font;
 }
 
 // Internal helper to ensure capacity
@@ -219,16 +238,185 @@ static void detach_lamps_from_wire(struct Wire *logic_wire)
     }
 }
 
-// Snap world position to grid
+static void update_gate_output_for_type(struct Gate *gate)
+{
+    if (!gate || !gate->output)
+        return;
+    if (gate->type == CONSTANT_HIGH)
+    {
+        gate->output->state = HIGH;
+    }
+    else if (gate->type == CONSTANT_LOW)
+    {
+        gate->output->state = LOW;
+    }
+    else
+    {
+        gate->output->state = UNKNOWN;
+    }
+}
+
+static const char *gate_type_label(GateType type)
+{
+    switch (type)
+    {
+    case CONSTANT_LOW:
+        return "0";
+    case CONSTANT_HIGH:
+        return "1";
+    case AND:
+        return "AND";
+    case OR:
+        return "OR";
+    case INVERT:
+        return "NOT";
+    case NAND:
+        return "NAND";
+    case NOR:
+        return "NOR";
+    case XOR:
+        return "XOR";
+    case XNOR:
+        return "XNOR";
+    default:
+        return "?";
+    }
+}
+
+static int snap_point_to_existing_endpoint(float *x, float *y)
+{
+    if (!x || !y)
+        return 0;
+    EditorWire *existing = find_wire_endpoint_near(*x, *y, WIRE_ENDPOINT_MERGE_RADIUS);
+    if (!existing)
+        return 0;
+
+    float best_x = existing->points[0].x;
+    float best_y = existing->points[0].y;
+    float best_dist = distance_sq(*x, *y, best_x, best_y);
+
+    if (existing->count > 1)
+    {
+        float ex = existing->points[existing->count - 1].x;
+        float ey = existing->points[existing->count - 1].y;
+        float dist_end = distance_sq(*x, *y, ex, ey);
+        if (dist_end < best_dist)
+        {
+            best_dist = dist_end;
+            best_x = ex;
+            best_y = ey;
+        }
+    }
+
+    if (best_dist > WIRE_ENDPOINT_MERGE_RADIUS * WIRE_ENDPOINT_MERGE_RADIUS)
+        return 0;
+
+    *x = best_x;
+    *y = best_y;
+    return 1;
+}
+
+static void align_wire_endpoint_to_gate(EditorWire *w, size_t point_index, int gate_index, GatePinType pin)
+{
+    if (!w || gate_index < 0 || (size_t)gate_index >= gate_count)
+        return;
+    if (point_index >= w->count)
+        return;
+    float px, py;
+    gate_pin_world(&gates[gate_index], pin, &px, &py);
+    w->points[point_index].x = px;
+    w->points[point_index].y = py;
+}
+
+static void reassign_logic_wire(struct Wire *from, struct Wire *to)
+{
+    if (!from || !to || from == to)
+        return;
+
+    if (to->state == UNKNOWN && from->state != UNKNOWN)
+    {
+        to->state = from->state;
+    }
+    else if (to->state != UNKNOWN && from->state != UNKNOWN && to->state != from->state)
+    {
+        to->state = UNKNOWN;
+    }
+
+    for (size_t i = 0; i < wire_count; ++i)
+    {
+        if (wires[i].logic_wire == from)
+            wires[i].logic_wire = to;
+    }
+    for (size_t i = 0; i < lamp_count; ++i)
+    {
+        if (lamps[i].logic_lamp && lamps[i].logic_lamp->input == from)
+            lamps[i].logic_lamp->input = to;
+    }
+    for (size_t i = 0; i < gate_count; ++i)
+    {
+        struct Gate *gate = gates[i].gate;
+        if (!gate)
+            continue;
+        if (gate->input1 == from)
+            gate->input1 = to;
+        if (gate->input2 == from)
+            gate->input2 = to;
+        if (gate->output == from)
+            gate->output = to;
+    }
+
+    free(from);
+}
+
+static struct Wire *attach_wire_endpoint_to_existing(EditorWire *new_wire, size_t point_index)
+{
+    if (!new_wire || point_index >= new_wire->count)
+        return NULL;
+    float x = new_wire->points[point_index].x;
+    float y = new_wire->points[point_index].y;
+    EditorWire *existing = find_wire_endpoint_near(x, y, WIRE_ENDPOINT_MERGE_RADIUS);
+    if (!existing)
+        return NULL;
+
+    float best_x = existing->points[0].x;
+    float best_y = existing->points[0].y;
+    float best_dist = distance_sq(x, y, best_x, best_y);
+
+    if (existing->count > 1)
+    {
+        float ex = existing->points[existing->count - 1].x;
+        float ey = existing->points[existing->count - 1].y;
+        float dist_end = distance_sq(x, y, ex, ey);
+        if (dist_end < best_dist)
+        {
+            best_dist = dist_end;
+            best_x = ex;
+            best_y = ey;
+        }
+    }
+
+    if (best_dist > WIRE_ENDPOINT_MERGE_RADIUS * WIRE_ENDPOINT_MERGE_RADIUS)
+        return NULL;
+
+    new_wire->points[point_index].x = best_x;
+    new_wire->points[point_index].y = best_y;
+    return existing->logic_wire;
+}
+
+// Snap world position to grid (round to nearest grid cell center)
+#include <math.h>
 static void snap_to_grid(float world_x, float world_y, int *out_x, int *out_y)
 {
-    *out_x = ((int)(world_x + rectangle_w / 2) / rectangle_w) * rectangle_w;
-    *out_y = ((int)(world_y + rectangle_h / 2) / rectangle_h) * rectangle_h;
+    if (rectangle_w <= 0) rectangle_w = 1;
+    if (rectangle_h <= 0) rectangle_h = 1;
+    *out_x = (int)roundf(world_x / (float)rectangle_w) * rectangle_w;
+    *out_y = (int)roundf(world_y / (float)rectangle_h) * rectangle_h;
 }
 
 void editor_begin_lamp_placement(void)
 {
     lamp_placement_active = true;
+    switch_placement_active = false;
     wire_placement_cancel();
 }
 
@@ -242,24 +430,24 @@ int editor_is_lamp_placement_active(void)
     return lamp_placement_active ? 1 : 0;
 }
 
-void editor_begin_switch_placement(void)
+void editor_begin_gate_placement(void)
 {
-    switch_placement_active = true;
+    switch_placement_active = true; // internal name still switch_placement_active
     lamp_placement_active = false;
     wire_placement_cancel();
 }
 
-void editor_cancel_switch_placement(void)
+void editor_cancel_gate_placement(void)
 {
     switch_placement_active = false;
 }
 
-int editor_is_switch_placement_active(void)
+int editor_is_gate_placement_active(void)
 {
     return switch_placement_active ? 1 : 0;
 }
 
-void editor_create_switch(float world_x, float world_y)
+void editor_create_gate(float world_x, float world_y)
 {
     ensure_gates_capacity();
     int sx, sy;
@@ -277,8 +465,37 @@ void editor_create_switch(float world_x, float world_y)
         g->gate->input2 = NULL;
         g->gate->output = NULL;
     }
-    // try to connect to nearby wires
-    connect_lamp_to_nearby_wire((EditorLamp *)g); // reuse logic: this is safe since pointer types differ; but instead just try wires
+    // try to connect to nearby wires (attach any nearby wire endpoints to this gate pins)
+    // check nearby wire endpoints and connect if within connection radius
+    for (size_t i = 0; i < wire_count; ++i)
+    {
+        EditorWire *w = &wires[i];
+        if (!w || w->count == 0) continue;
+        // check start
+        float sxw = w->points[0].x;
+        float syw = w->points[0].y;
+    if (distance_sq((float)sx, (float)sy, sxw, syw) <= GATE_PIN_SNAP_RADIUS * GATE_PIN_SNAP_RADIUS)
+        {
+            // attach as input1 if free, else input2
+            if (g->gate->input1 == NULL)
+                g->gate->input1 = w->logic_wire;
+            else if (g->gate->input2 == NULL)
+                g->gate->input2 = w->logic_wire;
+        }
+        // check end
+        if (w->count > 1)
+        {
+            float exw = w->points[w->count - 1].x;
+            float eyw = w->points[w->count - 1].y;
+            if (distance_sq((float)sx, (float)sy, exw, eyw) <= GATE_PIN_SNAP_RADIUS * GATE_PIN_SNAP_RADIUS)
+            {
+                if (g->gate->input1 == NULL)
+                    g->gate->input1 = w->logic_wire;
+                else if (g->gate->input2 == NULL)
+                    g->gate->input2 = w->logic_wire;
+            }
+        }
+    }
     switch_placement_active = false;
 }
 
@@ -304,9 +521,23 @@ void wire_placement_add_point(float world_x, float world_y)
 
     int sx, sy;
     snap_to_grid(world_x, world_y, &sx, &sy);
+    float final_x = (float)sx;
+    float final_y = (float)sy;
+
+    int gate_idx;
+    GatePinType pin;
+    if (find_nearest_gate_pin(world_x, world_y, GATE_PIN_SNAP_RADIUS, &gate_idx, &pin))
+    {
+        gate_pin_world(&gates[gate_idx], pin, &final_x, &final_y);
+    }
+    else
+    {
+        snap_point_to_existing_endpoint(&final_x, &final_y);
+    }
+
     ensure_wire_capacity();
-    wire_points[wire_point_count].x = (float)sx;
-    wire_points[wire_point_count].y = (float)sy;
+    wire_points[wire_point_count].x = final_x;
+    wire_points[wire_point_count].y = final_y;
     wire_point_count++;
 }
 
@@ -334,8 +565,50 @@ void wire_placement_finish(void)
         {
             w->logic_wire->state = UNKNOWN;
         }
-        connect_wire_endpoints_to_lamps(w);
-        // Also try to connect to nearby gates (endpoints)
+        w->start_gate_index = -1;
+        w->end_gate_index = -1;
+        w->start_pin = PIN_OUTPUT;
+        w->end_pin = PIN_OUTPUT;
+
+        struct Wire *base_logic = w->logic_wire;
+        struct Wire *start_logic = attach_wire_endpoint_to_existing(w, 0);
+        if (start_logic)
+        {
+            if (base_logic && base_logic != start_logic)
+            {
+                free(base_logic);
+                base_logic = start_logic;
+            }
+            w->logic_wire = start_logic;
+            base_logic = start_logic;
+        }
+
+        struct Wire *end_logic = attach_wire_endpoint_to_existing(w, w->count > 0 ? w->count - 1 : 0);
+        if (end_logic)
+        {
+            if (!base_logic)
+            {
+                base_logic = end_logic;
+                w->logic_wire = end_logic;
+            }
+            else if (end_logic != base_logic)
+            {
+                reassign_logic_wire(end_logic, base_logic);
+            }
+            base_logic = w->logic_wire;
+        }
+
+        if (!w->logic_wire)
+        {
+            w->logic_wire = malloc(sizeof(struct Wire));
+            if (w->logic_wire)
+            {
+                w->logic_wire->state = UNKNOWN;
+                base_logic = w->logic_wire;
+            }
+        }
+
+    // Also try to connect to nearby gates (endpoints)
         // find gates near start/end and attach as inputs/outputs using simple heuristics
         if (w->count > 0)
         {
@@ -346,15 +619,35 @@ void wire_placement_finish(void)
             // try pin-based connections
             int gate_idx;
             GatePinType pin;
-            if (find_nearest_gate_pin(sx, sy, LAMP_CONNECTION_RADIUS, &gate_idx, &pin))
+            if (find_nearest_gate_pin(sx, sy, GATE_PIN_SNAP_RADIUS, &gate_idx, &pin))
             {
                 // attach this wire to that gate pin
                 if (pin == PIN_INPUT1)
+                {
                     gates[gate_idx].gate->input1 = w->logic_wire;
+                }
                 else if (pin == PIN_INPUT2)
+                {
                     gates[gate_idx].gate->input2 = w->logic_wire;
+                }
                 else if (pin == PIN_OUTPUT)
+                {
+                    struct Wire *existing_output = gates[gate_idx].gate->output;
+                    if (existing_output && existing_output != w->logic_wire)
+                    {
+                        struct Wire *target = w->logic_wire ? w->logic_wire : existing_output;
+                        if (w->logic_wire && existing_output)
+                        {
+                            reassign_logic_wire(w->logic_wire, existing_output);
+                            target = existing_output;
+                        }
+                        w->logic_wire = target;
+                        base_logic = w->logic_wire;
+                    }
                     gates[gate_idx].gate->output = w->logic_wire;
+                    update_gate_output_for_type(gates[gate_idx].gate);
+                }
+                align_wire_endpoint_to_gate(w, 0, gate_idx, pin);
                 w->start_gate_index = gate_idx;
                 w->start_pin = pin;
             }
@@ -363,14 +656,34 @@ void wire_placement_finish(void)
                 w->start_gate_index = -1;
             }
 
-            if (find_nearest_gate_pin(ex, ey, LAMP_CONNECTION_RADIUS, &gate_idx, &pin))
+            if (find_nearest_gate_pin(ex, ey, GATE_PIN_SNAP_RADIUS, &gate_idx, &pin))
             {
                 if (pin == PIN_INPUT1)
+                {
                     gates[gate_idx].gate->input1 = w->logic_wire;
+                }
                 else if (pin == PIN_INPUT2)
+                {
                     gates[gate_idx].gate->input2 = w->logic_wire;
+                }
                 else if (pin == PIN_OUTPUT)
+                {
+                    struct Wire *existing_output = gates[gate_idx].gate->output;
+                    if (existing_output && existing_output != w->logic_wire)
+                    {
+                        struct Wire *target = w->logic_wire ? w->logic_wire : existing_output;
+                        if (w->logic_wire && existing_output)
+                        {
+                            reassign_logic_wire(w->logic_wire, existing_output);
+                            target = existing_output;
+                        }
+                        w->logic_wire = target;
+                        base_logic = w->logic_wire;
+                    }
                     gates[gate_idx].gate->output = w->logic_wire;
+                    update_gate_output_for_type(gates[gate_idx].gate);
+                }
+                align_wire_endpoint_to_gate(w, w->count - 1, gate_idx, pin);
                 w->end_gate_index = gate_idx;
                 w->end_pin = pin;
             }
@@ -379,6 +692,8 @@ void wire_placement_finish(void)
                 w->end_gate_index = -1;
             }
         }
+
+        connect_wire_endpoints_to_lamps(w);
         wire_count++;
     }
     // clear temporary placement buffer but keep stored wires
@@ -678,16 +993,34 @@ void editor_toggle_selected_switch(void)
     EditorGate *g = &gates[selected_index];
     if (!g->gate)
         return;
-    // toggle between CONSTANT_LOW and CONSTANT_HIGH
-    if (g->gate->type == CONSTANT_LOW)
-        g->gate->type = CONSTANT_HIGH;
-    else if (g->gate->type == CONSTANT_HIGH)
-        g->gate->type = CONSTANT_LOW;
-    // update output wire state
-    if (g->gate->output)
-    {
-        g->gate->output->state = (g->gate->type == CONSTANT_HIGH) ? HIGH : LOW;
-    }
+    GateType next = (g->gate->type < XNOR) ? (GateType)((int)g->gate->type + 1) : CONSTANT_LOW;
+    editor_set_selected_gate_type(next);
+}
+
+void editor_set_selected_gate_type(GateType type)
+{
+    if (selected_type != SELECT_WIRE + 1)
+        return;
+    if (selected_index < 0 || (size_t)selected_index >= gate_count)
+        return;
+    EditorGate *g = &gates[selected_index];
+    if (!g->gate)
+        return;
+    g->gate->type = type;
+    update_gate_output_for_type(g->gate);
+    editor_propagate_signals();
+}
+
+void editor_set_selected_wire_state(SignalState state)
+{
+    if (selected_type != SELECT_WIRE)
+        return;
+    if (selected_index < 0 || (size_t)selected_index >= wire_count)
+        return;
+    EditorWire *w = &wires[selected_index];
+    if (!w->logic_wire)
+        return;
+    w->logic_wire->state = state;
     editor_propagate_signals();
 }
 
@@ -777,10 +1110,15 @@ void editor_render(SDL_Renderer *renderer)
         // approximate screen size for width/height scaling
         float sx2, sy2;
         camera_world_to_screen(&editor_camera, gx + gw, gy + gh, &sx2, &sy2);
-        SDL_FRect rect = {sx, sy, sx2 - sx, sy2 - sy};
-        SDL_SetRenderDrawColor(renderer, 100, 100, 160, 255);
+        float rect_w = sx2 - sx;
+        float rect_h = sy2 - sy;
+        SDL_FRect rect = {sx, sy, rect_w, rect_h};
+        bool gate_selected = (selected_type == SELECT_WIRE + 1) && (int)i == selected_index;
+        SDL_Color fill_color = gate_selected ? (SDL_Color){125, 145, 215, 255} : (SDL_Color){100, 100, 160, 255};
+        SDL_Color border_color = gate_selected ? (SDL_Color){255, 210, 110, 255} : (SDL_Color){20, 20, 40, 255};
+        SDL_SetRenderDrawColor(renderer, fill_color.r, fill_color.g, fill_color.b, fill_color.a);
         SDL_RenderFillRect(renderer, &rect);
-        SDL_SetRenderDrawColor(renderer, 20, 20, 40, 255);
+        SDL_SetRenderDrawColor(renderer, border_color.r, border_color.g, border_color.b, border_color.a);
         SDL_RenderRect(renderer, &rect);
         // pin markers
         float px, py, px2, py2;
@@ -794,6 +1132,18 @@ void editor_render(SDL_Renderer *renderer)
         gate_pin_world(&gates[i], PIN_OUTPUT, &px, &py);
         camera_world_to_screen(&editor_camera, px, py, &px, &py);
         SDL_RenderFillRect(renderer, &(SDL_FRect){px - 2.5f, py - 2.5f, 5.0f, 5.0f});
+
+        if (gate_label_font && gates[i].gate)
+        {
+            const char *label = gate_type_label(gates[i].gate->type);
+            if (label && *label)
+            {
+                SDL_Color text_color = gate_selected ? (SDL_Color){255, 255, 255, 255} : (SDL_Color){235, 235, 235, 255};
+                float text_x = rect.x + 4.0f;
+                float text_y = rect.y + 2.0f;
+                render_text(renderer, gate_label_font, label, text_x, text_y, text_color);
+            }
+        }
     }
 
     // Render all wires
@@ -907,6 +1257,16 @@ void editor_render(SDL_Renderer *renderer)
         SDL_SetRenderDrawColor(renderer, 255, 220, 120, 180);
         SDL_RenderRect(renderer, &(SDL_FRect){sx - LAMP_DEFAULT_RADIUS, sy - LAMP_DEFAULT_RADIUS, LAMP_DEFAULT_RADIUS * 2.0f, LAMP_DEFAULT_RADIUS * 2.0f});
     }
+    if (switch_placement_active)
+    {
+        int snap_x, snap_y;
+        snap_to_grid(pointer_world_x, pointer_world_y, &snap_x, &snap_y);
+        float sx, sy;
+        camera_world_to_screen(&editor_camera, (float)snap_x, (float)snap_y, &sx, &sy);
+        // draw a small rectangle representing the switch
+        SDL_SetRenderDrawColor(renderer, 180, 220, 180, 200);
+        SDL_RenderRect(renderer, &(SDL_FRect){sx - 10.0f, sy - 7.0f, 20.0f, 14.0f});
+    }
 }
 
 void editor_create_lamp(float world_x, float world_y)
@@ -977,6 +1337,39 @@ static int find_nearest_gate_pin(float world_x, float world_y, float max_distanc
     for (size_t i = 0; i < gate_count; ++i)
     {
         EditorGate *eg = &gates[i];
+        float input_x = eg->x;
+        float output_x = eg->x + eg->width;
+        float mid_y = eg->y + eg->height * 0.5f;
+
+        if (fabsf(world_x - input_x) <= max_distance)
+        {
+            GatePinType targeted_pin = (world_y < mid_y) ? PIN_INPUT1 : PIN_INPUT2;
+            float px, py;
+            gate_pin_world(eg, targeted_pin, &px, &py);
+            float dsq = distance_sq(world_x, world_y, px, py);
+            if (dsq <= best_sq)
+            {
+                best_sq = dsq;
+                best_gate = (int)i;
+                best_pin = targeted_pin;
+                found = 1;
+            }
+        }
+
+        if (fabsf(world_x - output_x) <= max_distance)
+        {
+            float px, py;
+            gate_pin_world(eg, PIN_OUTPUT, &px, &py);
+            float dsq = distance_sq(world_x, world_y, px, py);
+            if (dsq <= best_sq)
+            {
+                best_sq = dsq;
+                best_gate = (int)i;
+                best_pin = PIN_OUTPUT;
+                found = 1;
+            }
+        }
+
         for (GatePinType p = PIN_INPUT1; p <= PIN_OUTPUT; p++)
         {
             float px, py;
