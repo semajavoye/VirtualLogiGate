@@ -8,6 +8,27 @@
 
 #include <SDL3/SDL.h>
 
+// Gate pin model
+typedef enum
+{
+    PIN_INPUT1 = 0,
+    PIN_INPUT2 = 1,
+    PIN_OUTPUT = 2
+} GatePinType;
+
+typedef struct
+{
+    float x, y;
+    float width, height;
+    struct Gate *gate; // logic
+} EditorGate;
+
+static EditorGate *gates = NULL;
+static size_t gate_count = 0;
+static size_t gate_capacity = 0;
+
+static bool switch_placement_active = false;
+
 struct VisualGate
 {
     float x;
@@ -18,7 +39,7 @@ struct VisualGate
     bool is_selected;
     bool is_dragging;
 
-    struct Gate *gate;  // Pointer to the underlying logic gate
+    struct Gate *gate; // Pointer to the underlying logic gate
 };
 
 struct VisualWire
@@ -34,11 +55,10 @@ struct VisualWire
 
     // Connections
 
-    
     float *bend_points; // Array of bend points (x, y pairs)
     size_t bend_point_count;
 
-    struct Wire *wire;  // Pointer to the underlying logic wire
+    struct Wire *wire; // Pointer to the underlying logic wire
 };
 
 struct VisualLamp
@@ -52,7 +72,7 @@ struct VisualLamp
 
 // Editor initialization and management
 void editor_init(void);
-Camera* editor_get_camera(void);
+Camera *editor_get_camera(void);
 
 // Shutdown/cleanup editor resources
 void editor_shutdown(void);
@@ -87,9 +107,31 @@ int wire_placement_is_active(void);
 
 // Multiple-wire management & selection
 // Select a wire at the given world coordinate. Returns 1 if a wire was selected, 0 otherwise.
-int editor_select_wire_at(float world_x, float world_y, const Camera *camera);
+// Select any editor object (wire, lamp, gate) at the given world coordinate.
+// Returns 1 if an object was selected, 0 otherwise.
+int editor_select_at(float world_x, float world_y, const Camera *camera);
 
-// Delete the currently selected wire (if any)
+// Create a lamp visual+logic at a world position
+void editor_create_lamp(float world_x, float world_y);
+
+// Lamp placement helpers (used by UI tools)
+void editor_begin_lamp_placement(void);
+void editor_cancel_lamp_placement(void);
+int editor_is_lamp_placement_active(void);
+
+// Gate / switch placement
+void editor_begin_switch_placement(void);
+void editor_cancel_switch_placement(void);
+int editor_is_switch_placement_active(void);
+void editor_create_switch(float world_x, float world_y);
+
+// Force a signal propagation pass (updates gates, wires, lamps)
+void editor_propagate_signals(void);
+
+// Toggle selected switch (if selection is a switch)
+void editor_toggle_selected_switch(void);
+
+// Delete the currently selected object (wire/lamp/gate)
 void editor_delete_selected(void);
 
 #endif // EDITOR_H

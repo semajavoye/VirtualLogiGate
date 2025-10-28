@@ -2,15 +2,26 @@
 #define LOGIC_H
 
 // Typedefs for defining some states
-typedef enum { 
-    CONSTANT_LOW = 0, CONSTANT_HIGH = 1,
-    AND, OR, INVERT, NAND, NOR, XOR, XNOR} GateType;
-typedef enum { 
-    LOW = 0, 
+typedef enum
+{
+    CONSTANT_LOW = 0,
+    CONSTANT_HIGH = 1,
+    AND,
+    OR,
+    INVERT,
+    NAND,
+    NOR,
+    XOR,
+    XNOR
+} GateType;
+typedef enum
+{
+    LOW = 0,
     HIGH = 1,
     UNKNOWN = 2 // Just for Debugging or uninitialized wires
 } SignalState;
-typedef enum {
+typedef enum
+{
     CONNECTION_GATE,
     CONNECTION_COMPONENT,
     CONNECTION_LAMP
@@ -34,7 +45,8 @@ struct WireConnection
 {
     ConnectionType type;
 
-    union {
+    union
+    {
         struct Gate *gate;
         struct Component *component;
         struct Lamp *lamp;
@@ -43,12 +55,12 @@ struct WireConnection
     int pin_index; // Index of the pin on the target
 };
 
-struct Wire 
+struct Wire
 {
     SignalState state;
 };
 
-struct Component 
+struct Component
 {
     char *name; // Name of the component
 
@@ -70,7 +82,7 @@ struct Component
     int num_outputs;
 };
 
-struct Lamp 
+struct Lamp
 {
     struct Wire *input;
 

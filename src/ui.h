@@ -5,7 +5,8 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <stdbool.h>
 
-typedef struct {
+typedef struct
+{
     SDL_FRect rect;
     const char *text;
     SDL_Color color;
@@ -14,21 +15,23 @@ typedef struct {
     void (*on_click)(void);
 } Button;
 
-typedef struct {
+typedef struct
+{
     Button *buttons;
     int button_count;
     TTF_Font *font;
 } UI;
 
-typedef enum {
+typedef enum
+{
     UI_STATE_MAIN_MENU,
     UI_STATE_INGAME
 } AppUIState;
 
-UI* ui_create(TTF_Font *font);
+UI *ui_create(TTF_Font *font);
 void ui_destroy(UI *ui);
 
-Button* ui_add_button(UI *ui, float x, float y, float w, float h, 
+Button *ui_add_button(UI *ui, float x, float y, float w, float h,
                       const char *text, void (*on_click)(void));
 
 void ui_handle_mouse_motion(UI *ui, float x, float y);

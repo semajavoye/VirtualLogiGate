@@ -13,6 +13,8 @@ static Uint64 ingame_entry_time = 0;
 void on_start_simulation_clicked(void);
 void on_quit_clicked(void);
 void on_back_to_menu_clicked(void);
+void on_place_lamp_clicked(void);
+void on_place_switch_clicked(void);
 
 bool can_accept_ingame_input();
 
